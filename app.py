@@ -95,10 +95,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("# 🎬 YouTube Translator")
-st.markdown('<p class="subtitle">英語のYouTube動画を日本語に全文翻訳します</p>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Translate English YouTube videos into Japanese — full transcript.</p>', unsafe_allow_html=True)
 
-with st.expander("⚙️ 設定", expanded=True):
-    api_key = st.text_input("Gemini APIキー", type="password", placeholder="AIza...")
+with st.expander("⚙️ Settings", expanded=True):
+    api_key = st.text_input("Gemini API Key", type="password", placeholder="AIza...")
     url = st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=...")
 
 def get_video_id(url):
@@ -117,46 +117,46 @@ def group_by_minute(transcript):
         groups[minute].append(t.text)
     return groups
 
-if st.button("🚀 翻訳する"):
+if st.button("🚀 Translate"):
     if not api_key:
-        st.error("APIキーを入力してください")
+        st.error("Please enter your API key.")
     elif not url:
-        st.error("URLを入力してください")
+        st.error("Please enter a YouTube URL.")
     else:
         video_id = get_video_id(url)
         if not video_id:
-            st.error("URLが正しくないです")
+            st.error("Invalid YouTube URL.")
         else:
-            with st.spinner("字幕を取得中..."):
+            with st.spinner("Fetching transcript..."):
                 try:
                     ytt = YouTubeTranscriptApi()
                     transcript = ytt.fetch(video_id)
                 except Exception as e:
-                    st.error(f"字幕の取得に失敗しました：{e}")
+                    st.error(f"Failed to fetch transcript: {e}")
                     st.stop()
 
             client = genai.Client(api_key=api_key)
             full_text = " ".join([t.text for t in transcript])
             minute_groups = group_by_minute(transcript)
 
-            # 1回のAPIで全分まとめて翻訳
-            with st.spinner("翻訳中..."):
+            # Translate all segments in a single API call
+            with st.spinner("Translating..."):
                 combined = ""
                 for minute in sorted(minute_groups.keys()):
                     chunk = " ".join(minute_groups[minute])
-                    combined += f"[{minute}分]\n{chunk}\n\n"
+                    combined += f"[{minute}min]\n{chunk}\n\n"
 
-                prompt = f"""以下はYouTube動画の英語字幕です。[N分]というタグごとに区切られています。
-各区間を自然な日本語に翻訳してください。
-以下のルールを必ず守ってください：
+                prompt = f"""Below is an English YouTube transcript, divided into segments tagged [Nmin].
+Translate each segment into natural Japanese.
+Follow these rules strictly:
 
-1. 各区間の先頭に [N分] タグをそのまま残す
-2. タグの直後に改行して翻訳文を書く
-3. 話者が変わる場合は「【話者A】」「【話者B】」のように話者名を付ける（名前がわかる場合はその名前を使う）
-4. 同じ話者が続く場合はタグを繰り返さない
-5. 余計な説明や注釈は不要
+1. Keep the [Nmin] tag at the start of each segment
+2. Write the translation on a new line immediately after the tag
+3. If the speaker changes, prefix with the speaker name like [Speaker A] or [Speaker B] (use their real name if known)
+4. Do not repeat the speaker tag if the same speaker continues
+5. No extra commentary or annotations
 
-字幕：
+Transcript:
 {combined}"""
 
                 try:
@@ -166,17 +166,17 @@ if st.button("🚀 翻訳する"):
                     )
                     translated_full = response.text.strip()
                 except Exception as e:
-                    st.error(f"翻訳に失敗しました：{e}")
+                    st.error(f"Translation failed: {e}")
                     st.stop()
 
-            # 結果をパース
+            # Parse results
             import re
-            sections = re.split(r'(\[\d+分\])', translated_full)
+            sections = re.split(r'(\[\d+min\])', translated_full)
 
-            tab1, tab2 = st.tabs(["🕐 タイムテーブル", "📄 全文翻訳"])
+            tab1, tab2 = st.tabs(["🕐 Timetable", "📄 Full Translation"])
 
             with tab1:
-                st.markdown("### 分ごとの翻訳")
+                st.markdown("### Minute-by-minute translation")
                 i = 1
                 while i < len(sections) - 1:
                     label = sections[i]
@@ -184,20 +184,21 @@ if st.button("🚀 翻訳する"):
                     st.markdown(f'<div class="minute-header">⏱ {label}</div><hr class="minute-divider">', unsafe_allow_html=True)
                     st.markdown(f'<div class="translation-block">{text}</div>', unsafe_allow_html=True)
                     i += 2
-                st.success("タイムテーブル完成！")
+                st.success("Timetable ready!")
             with tab2:
                 import re
-                full_translated = re.sub(r'\[\d+分\]', '', translated_full)
-                # 話者タグの前で改行を入れる
-                full_translated = re.sub(r'(【.+?】)', r'<br><br>\1', full_translated)
-                # 句点や？！の後で改行
+                full_translated = re.sub(r'\[\d+min\]', '', translated_full)
+                # Line break before speaker tags
+                full_translated = re.sub(r'(\[.+?\])', r'<br><br>\1', full_translated)
+                # Line break after sentence-ending punctuation
                 full_translated = re.sub(r'([。？！])\s*', r'\1<br>', full_translated)
                 full_translated = full_translated.strip()
 
                 st.markdown(f'<div class="full-translation">{full_translated}</div>', unsafe_allow_html=True)
                 st.download_button(
-                    label="📥 テキストファイルで保存",
+                    label="📥 Save as text file",
                     data=re.sub(r'<br>', '\n', full_translated),
                     file_name="translation.txt",
                     mime="text/plain"
+                )
                 )
